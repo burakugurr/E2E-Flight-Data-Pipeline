@@ -1,5 +1,4 @@
 version: '3.8'
-
 services:
 
   # minio:
@@ -88,7 +87,6 @@ services:
 
   kafka:
     image: bitnami/kafka:3.4.1
-    hostname: 192.168.89.83
     container_name: kafka
     ports:
       - 9092:9092
@@ -101,6 +99,10 @@ services:
       KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
       KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://192.168.1.149:9092
+      KAFKA_ADVERTISED_HOST_NAME: "192.168.1.149"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+
     volumes:
       - ./data/kafka:/bitnami/kafka
 

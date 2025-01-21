@@ -9,6 +9,7 @@ from tqdm import tqdm
 from confluent_kafka import Producer
 import socket
 from selenium.webdriver.chrome.options import Options
+import json
 
 # Set up Chrome options
 chrome_options = Options()
@@ -16,6 +17,7 @@ chrome_options.add_argument("--headless")  # Enable headless mode
 chrome_options.add_argument("--disable-gpu")  # Disable GPU (optional but recommended for headless mode)
 chrome_options.add_argument("--no-sandbox")  # For Linux systems
 chrome_options.add_argument("--disable-extensions")  # Disable extensions (optional)
+chrome_options.add_argument("--disable-dev-shm-usage")
 
 
 url = "https://www.flightradar24.com/data/airports/---"
@@ -25,8 +27,8 @@ soup = BeautifulSoup(res.content, "html.parser")
 
 def produce_message(data):
 
-    conf = {'bootstrap.servers': '192.168.89.83:9092',
-            'client.id': socket.gethostname()}
+    conf = {'bootstrap.servers': '0.0.0.0:9092',
+        'client.id': socket.gethostname()}
 
     print(socket.gethostname())
 
@@ -37,10 +39,15 @@ def produce_message(data):
             print("Failed to deliver message: %s: %s" % (str(msg), str(err)))
         else:
             print("Message produced: %s" % (str(msg)))
+    try:
+        data = json.dumps(data).encode('utf-8') 
 
-    producer.produce("flightdata", key="key", value=data, callback=acked)
+        producer.produce("flightdata", key="key", value=data, callback=acked)
 
-    producer.flush()
+        producer.flush()
+    except Exception as e:
+        print(e)
+        
 
 
 def airport_urls():
@@ -74,11 +81,11 @@ def fetch_airport_data(airport_url):
         # çözülecek sorunlar 1 rating değeri nan geliyor eğer nan geliyorsa olduğu gibi kalsın nandan farklı ise float yapsın onu revize et
         # çözülecek sorunlar 2 bazı airportların uçuş değerleri yok. onları kontrol et
         airport_data = {
-            'airport_code': soup.find("div", {"class": "row cnt-airport-details"}).find("div", {"class": "col-md-6 n-p"}).h2.text.strip() if soup.find("div", {"class": "row cnt-airport-details"}) else np.nan,
-            'airport_name': soup.find("div", {"class": "row cnt-airport-details"}).find("div", {"class": "col-md-6 n-p"}).h1.text.strip() if soup.find("div", {"class": "row cnt-airport-details"}) else np.nan,
-            'city': soup.find("div", {"class": "row cnt-airport-details"}).find("div", {"class": "col-md-6 n-p"}).h3.text.strip() if soup.find("div", {"class": "row cnt-airport-details"}) else np.nan,
-            'country': soup.find("div", {"class": "row cnt-airport-details"}).find("div", {"class": "col-md-6 n-p"}).h3.text.strip() if soup.find("div", {"class": "row cnt-airport-details"}) else np.nan,
-            'rating': soup.find("div", {"class": "row cnt-airport-details"}).find("div", {"class": "col-xs-4 col-sm-4 hidden-md hidden-lg"}).find("div", {"class": "cnt-chart"}).text.replace('%', '').strip() if soup.find("div", {"class": "row cnt-airport-details"}) else np.nan
+            'airport_code': soup.find("div", {"class": "row cnt-airport-details"}).find("div", {"class": "col-md-6 n-p"}).h2.text.strip() if soup.find("div", {"class": "row cnt-airport-details"}) else "Nan",
+            'airport_name': soup.find("div", {"class": "row cnt-airport-details"}).find("div", {"class": "col-md-6 n-p"}).h1.text.strip() if soup.find("div", {"class": "row cnt-airport-details"}) else "Nan",
+            'city': soup.find("div", {"class": "row cnt-airport-details"}).find("div", {"class": "col-md-6 n-p"}).h3.text.strip() if soup.find("div", {"class": "row cnt-airport-details"}) else "Nan",
+            'country': soup.find("div", {"class": "row cnt-airport-details"}).find("div", {"class": "col-md-6 n-p"}).h3.text.strip() if soup.find("div", {"class": "row cnt-airport-details"}) else "Nan",
+            'rating': soup.find("div", {"class": "row cnt-airport-details"}).find("div", {"class": "col-xs-4 col-sm-4 hidden-md hidden-lg"}).find("div", {"class": "cnt-chart"}).text.replace('%', '').strip() if soup.find("div", {"class": "row cnt-airport-details"}) else "Nan"
         }
         # Routes Data
         routes = []
@@ -87,17 +94,17 @@ def fetch_airport_data(airport_url):
             if routes_body:
                 for route in routes_body:
                     routes.append({
-                    'rank': route.text.split()[0] if route.text else np.nan,
-                    'airport_code': route.find("a").text.strip() if route.find("a") else np.nan,
-                    'airport_name': route.find("a")['title'] if route.find("a") and 'title' in route.find("a").attrs else np.nan,
-                    'flights_per_week': route.find("span").text.split()[0] if route.find("span") else np.nan
+                    'rank': route.text.split()[0] if route.text else "Nan",
+                    'airport_code': route.find("a").text.strip() if route.find("a") else "Nan",
+                    'airport_name': route.find("a")['title'] if route.find("a") and 'title' in route.find("a").attrs else "Nan",
+                    'flights_per_week': route.find("span").text.split()[0] if route.find("span") else "Nan"
                 })
         except:
             routes.append({
-                'rank': np.nan,
-                'airport_code': np.nan,
-                'airport_name': np.nan,
-                'flights_per_week':np.nan
+                'rank': "Nan",
+                'airport_code': "Nan",
+                'airport_name': "Nan",
+                'flights_per_week':"Nan"
             })
         
         # Arrivals Data
@@ -106,21 +113,21 @@ def fetch_airport_data(airport_url):
         if arrivals_body:
             for arrival_deep in arrivals_body:
                 arrivals.append({
-                    'status_arrivals': arrival_deep.find("div", {"class": "col-xs-12 col-sm-12 p-xxs ng-binding"}).text.strip() if arrival_deep.find("div", {"class": "col-xs-12 col-sm-12 p-xxs ng-binding"}) else np.nan,
-                    'time_arrivals': arrival_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs"}).text.strip() if arrival_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs"}) else np.nan,
-                    'flight_arrivals': arrival_deep.find("a").text.strip() if arrival_deep.find("a") else np.nan,
-                    'from_arrivals': arrival_deep.find("div", {"class": "col-xs-6 col-sm-6 p-xxs"}).find("span", {"class": "ng-binding"}).text.strip() if arrival_deep.find("div", {"class": "col-xs-6 col-sm-6 p-xxs"}) and arrival_deep.find("div", {"class": "col-xs-6 col-sm-6 p-xxs"}).find("span", {"class": "ng-binding"}) else np.nan,
-                    'aircraft_arrivals': arrival_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs ng-binding"}).text.strip() if arrival_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs ng-binding"}) else np.nan,
-                    'airline_arrivals': [a.text.strip() for a in arrival_deep.find_all("a", {"class": "notranslate ng-binding"})][-1] if arrival_deep.find_all("a", {"class": "notranslate ng-binding"}) else np.nan
+                    'status_arrivals': arrival_deep.find("div", {"class": "col-xs-12 col-sm-12 p-xxs ng-binding"}).text.strip() if arrival_deep.find("div", {"class": "col-xs-12 col-sm-12 p-xxs ng-binding"}) else "Nan",
+                    'time_arrivals': arrival_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs"}).text.strip() if arrival_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs"}) else "Nan",
+                    'flight_arrivals': arrival_deep.find("a").text.strip() if arrival_deep.find("a") else "Nan",
+                    'from_arrivals': arrival_deep.find("div", {"class": "col-xs-6 col-sm-6 p-xxs"}).find("span", {"class": "ng-binding"}).text.strip() if arrival_deep.find("div", {"class": "col-xs-6 col-sm-6 p-xxs"}) and arrival_deep.find("div", {"class": "col-xs-6 col-sm-6 p-xxs"}).find("span", {"class": "ng-binding"}) else "Nan",
+                    'aircraft_arrivals': arrival_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs ng-binding"}).text.strip() if arrival_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs ng-binding"}) else "Nan",
+                    'airline_arrivals': [a.text.strip() for a in arrival_deep.find_all("a", {"class": "notranslate ng-binding"})][-1] if arrival_deep.find_all("a", {"class": "notranslate ng-binding"}) else "Nan"
                 })
         else:
             arrivals.append({
-                    'status_arrivals': np.nan,
-                    'time_arrivals': np.nan,
-                    'flight_arrivals': np.nan,
-                    'from_arrivals': np.nan,
-                    'aircraft_arrivals': np.nan,
-                    'airline_arrivals': np.nan
+                    'status_arrivals': "Nan",
+                    'time_arrivals': "Nan",
+                    'flight_arrivals': "Nan",
+                    'from_arrivals': "Nan",
+                    'aircraft_arrivals': "Nan",
+                    'airline_arrivals': "Nan"
                 })
             
     
@@ -130,21 +137,21 @@ def fetch_airport_data(airport_url):
         if departures_body:
             for departures_deep in departures_body:
                 departures.append({
-                    'status_departures': departures_deep.find("div", {"class": "col-xs-12 col-sm-12 p-xxs ng-binding"}).text.strip() if departures_deep.find("div", {"class": "col-xs-12 col-sm-12 p-xxs ng-binding"}) else np.nan,
-                    'time_departures': departures_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs"}).text.strip() if departures_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs"}) else np.nan,
-                    'flight_departures': departures_deep.find("a").text.strip() if departures_deep.find("a") else np.nan,
-                    'to_departures': departures_deep.find("div", {"class": "col-xs-6 col-sm-6 p-xxs"}).find("span", {"class": "ng-binding"}).text.strip() if departures_deep.find("div", {"class": "col-xs-6 col-sm-6 p-xxs"}) and departures_deep.find("div", {"class": "col-xs-6 col-sm-6 p-xxs"}).find("span", {"class": "ng-binding"}) else np.nan,
-                    'aircraft_departures': departures_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs ng-binding"}).text.strip() if departures_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs ng-binding"}) else np.nan,
-                    'airline_departures': [a.text.strip() for a in departures_deep.find_all("a", {"class": "notranslate ng-binding"})][-1] if departures_deep.find_all("a", {"class": "notranslate ng-binding"}) else np.nan
+                    'status_departures': departures_deep.find("div", {"class": "col-xs-12 col-sm-12 p-xxs ng-binding"}).text.strip() if departures_deep.find("div", {"class": "col-xs-12 col-sm-12 p-xxs ng-binding"}) else "Nan",
+                    'time_departures': departures_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs"}).text.strip() if departures_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs"}) else "Nan",
+                    'flight_departures': departures_deep.find("a").text.strip() if departures_deep.find("a") else "Nan",
+                    'to_departures': departures_deep.find("div", {"class": "col-xs-6 col-sm-6 p-xxs"}).find("span", {"class": "ng-binding"}).text.strip() if departures_deep.find("div", {"class": "col-xs-6 col-sm-6 p-xxs"}) and departures_deep.find("div", {"class": "col-xs-6 col-sm-6 p-xxs"}).find("span", {"class": "ng-binding"}) else "Nan",
+                    'aircraft_departures': departures_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs ng-binding"}).text.strip() if departures_deep.find("div", {"class": "col-xs-3 col-sm-3 p-xxs ng-binding"}) else "Nan",
+                    'airline_departures': [a.text.strip() for a in departures_deep.find_all("a", {"class": "notranslate ng-binding"})][-1] if departures_deep.find_all("a", {"class": "notranslate ng-binding"}) else "Nan"
                 })
         else:
             departures.append({
-                    'status_departures':np.nan ,
-                    'time_departures': np.nan,
-                    'flight_departures': np.nan,
-                    'to_departures': np.nan,
-                    'aircraft_departures': np.nan,
-                    'airline_departures': np.nan
+                    'status_departures':"Nan" ,
+                    'time_departures': "Nan",
+                    'flight_departures': "Nan",
+                    'to_departures': "Nan",
+                    'aircraft_departures': "Nan",
+                    'airline_departures': "Nan"
                 })
         airport_data = {
             'airport_data': airport_data,
@@ -192,12 +199,13 @@ def process_batches(airport_list):
 
 
 
-# airpotlist = airport_urls()
+airpotlist = airport_urls()
 
-# url_list =  [ i['url'] for i in airpotlist]
-# r = process_batches(url_list[:10])
-# print(r)
-# print("*"*50) 
+url_list =  [ i['url'] for i in airpotlist]
+print(url_list)
+r = process_batches(url_list[:5])
+print(r)
 
+print("*"*50) 
 
 
